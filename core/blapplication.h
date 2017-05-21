@@ -1,27 +1,27 @@
 #ifndef BLAPPLICATION_H
 #define BLAPPLICATION_H
 
+/* Standard */
 #include <memory>
 
+/* Qt */
 #include <QOpenGLWidget>
 #include <QOpenGLFunctions>
 #include <QOpenGLShaderProgram>
 #include <QOpenGLShader>
+
+/* Core */
+#include <blmesh.h>
+#include <blcamera.h>
+#include <blshaderprogram.h>
+#include <blmodel.h>
+#include <blconstants.h>
+#include <bltexture.h>
+
+/* Utils */
 #include <bllight.h>
-
-
-#include "core/blmesh.h"
-#include "core/blcamera.h"
-
-#include "utils/blcubemesh.h"
-#include "utils/bltimer.h"
-
-#include "bltexture.h"
-#include "blconstants.h"
-#include "blmodel.h"
-
-using std::unique_ptr;
-using std::shared_ptr;
+#include <blcubemesh.h>
+#include <bltimer.h>
 
 class BLApplication : public QOpenGLWidget, public QOpenGLFunctions {
 
@@ -30,7 +30,7 @@ public:
 
     virtual ~BLApplication();
 
-    unique_ptr<black::Camera> m_camera;
+    std::shared_ptr<black::Camera> m_currentCamera;
 
 protected:
     // QOpenGLWidget interface
@@ -42,31 +42,34 @@ protected:
     virtual void keyPressEvent(QKeyEvent *event);
     virtual void mouseMoveEvent(QMouseEvent *);
 private:
-    void initModels();
     void loadResources();
     void prepareToRender();
 
 private:
-    unique_ptr<QOpenGLShaderProgram> m_program;
-    unique_ptr<QOpenGLShader> m_vShader;
-    unique_ptr<QOpenGLShader> m_fShader;
+    std::unique_ptr<black::ShaderProgram> m_program;
+    std::unique_ptr<black::ShaderProgram> m_diffuseShader;
 
-    unique_ptr<black::CubeMesh> m_cubeMesh;
-    unique_ptr<black::Mesh> m_axisMesh;
+    std::shared_ptr<black::Shader> m_vShader;
+    std::shared_ptr<black::Shader> m_fShader;
 
     bool m_initialized = false;
 
-    unique_ptr<black::Timer> m_timer;
+    std::shared_ptr<black::Camera> m_specCamera;
+    std::shared_ptr<black::Camera> m_objCamera;
+    std::unique_ptr<black::Timer> m_timer;
 
     // Handled by rm
     std::shared_ptr<black::Model> m_stallMesh;
     std::shared_ptr<black::Model> m_bodyMesh;
     std::shared_ptr<black::Model> m_monkeyMesh;
     std::shared_ptr<black::Model> m_houseModel;
+    std::shared_ptr<black::Model> m_landModel;
+    std::shared_ptr<black::Model> m_skyBoxModel;
+    std::shared_ptr<black::Model> m_flyingIslandModel;
 
     std::shared_ptr<black::Texture> m_brickTexture;
 
-    unique_ptr<black::Light> m_lightSource;
+    std::shared_ptr<black::Light> m_lightSource;
 
     // QWindow interface
 protected:

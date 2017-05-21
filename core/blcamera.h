@@ -4,12 +4,18 @@
 #include <QMatrix4x4>
 #include <QMouseEvent>
 
+#include <algorithm>
+
 namespace black {
 
 /**
  * @brief The Camera class is
  *  base class for all camera
  *  types in engine.
+ *
+ * @version 1.1 28.03.2017
+ * Changed algorythm of rotations (pitch, yaw, roll).
+ * Now are using trigonometry rules. Working well.
  *
  * @version 1.0 22.03.2017
  * Working camera.
@@ -22,6 +28,7 @@ class Camera {
 public:
 
     Camera();
+    Camera(const Camera &camera);
     Camera(float fov, float ratio, float nearPlane, float farPlane);
 
     virtual ~Camera();
@@ -70,8 +77,10 @@ public:
     float nearPlane() const { return m_near; }
     float farPlane() const { return m_far; }
 
-    QMatrix4x4 perspective();
-    QMatrix4x4 view();
+    const QMatrix4x4& perspective();
+    const QMatrix4x4& view();
+    const QMatrix4x4& perspective() const;
+    const QMatrix4x4& view() const;
 
     QVector3D position() const { return m_position; }
     QVector3D lookAt() const { return m_lookAt; }

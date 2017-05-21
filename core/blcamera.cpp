@@ -8,12 +8,33 @@ namespace black {
 
 Camera::Camera()
     : m_perspective(), m_fov(45.0f), m_ratio(Constants::ASPECT_RATIO),
-      m_near(0.1f), m_far(1000.0f), m_view(), m_position(0, 0, 3.0f),
-      m_lookAt(0, 0, -1.0f), m_upVector(0, 1.0f, 0),
+      m_near(0.1f), m_far(5000.0f), m_view(), m_position(0, 5.0f, 3.0f),
+      m_lookAt(0, 0, 1.0f), m_upVector(0, 1.0f, 0),
       m_needUpdateView(), m_needUpdatePerspective()
 {
     setPerspective(m_fov, m_ratio, m_near, m_far);
     setView(m_position, m_lookAt, m_upVector);
+}
+
+Camera::Camera(const Camera &camera)
+{
+    m_perspective = camera.m_perspective;
+    m_fov = camera.m_fov;
+    m_ratio = camera.m_ratio;
+    m_near = camera.m_near;
+    m_far = camera.m_far;
+    m_view = camera.m_view;
+    m_position = camera.m_position;
+    m_lookAt = camera.m_lookAt;
+    m_upVector = camera.m_upVector;
+    m_pitch = camera.m_pitch;
+    m_yaw = camera.m_yaw;
+    m_roll = camera.m_roll;
+    m_pitchConstraint = camera.m_pitchConstraint;
+    m_yawConstraint = camera.m_yawConstraint;
+    m_rollConstraint = camera.m_rollConstraint;
+    m_needUpdateView = camera.m_needUpdateView;
+    m_needUpdatePerspective = camera.m_needUpdatePerspective;
 }
 
 Camera::Camera(float fov, float ratio, float near, float far)
@@ -58,13 +79,13 @@ void Camera::move(const QVector3D &moveVector)
 
 void Camera::moveRight(float dist)
 {
-    m_position += QVector3D::normal(m_lookAt, m_upVector);
+    m_position += dist * QVector3D::normal(m_lookAt, m_upVector);
     m_needUpdateView = true;
 }
 
 void Camera::moveLeft(float dist)
 {
-    m_position -= QVector3D::normal(m_lookAt, m_upVector);
+    m_position -= dist * QVector3D::normal(m_lookAt, m_upVector);
     m_needUpdateView = true;
 }
 
@@ -94,9 +115,13 @@ void Camera::moveBack(float dist)
 
 void Camera::setRotate(const QVector3D &rotation)
 {
-    m_pitch = qMin(rotation.x(), m_pitchConstraint);
-    m_yaw   = qMin(rotation.y(), m_yawConstraint);
-    m_roll  = qMin(rotation.z(), m_rollConstraint);
+    // TODO: constraints
+    //m_pitch = std::min( std::max( m_pitch, -m_pitchConstraint ), m_pitchConstraint );
+    //m_yaw = std::min( std::max( m_yaw, -m_yawConstraint ), m_yawConstraint );
+    //m_roll = std::min( std::max( m_roll, -m_rollConstraint ), m_rollConstraint );
+    m_pitch = rotation.x();
+    m_yaw = rotation.y();
+    m_roll = rotation.z();
     updateLookAt();
 }
 
@@ -120,9 +145,9 @@ void Camera::handleWheel(QWheelEvent *e)
 
 void Camera::updateLookAt()
 {
-    float z = qCos(qDegreesToRadians(m_pitch)) * qCos(qDegreesToRadians(m_yaw));
-    float y = -qSin(qDegreesToRadians(m_pitch));
-    float x = -qCos(qDegreesToRadians(m_pitch)) * qSin(qDegreesToRadians(m_yaw));
+    float z = qCos(qDegreesToRadians(-m_pitch)) * qCos(qDegreesToRadians(m_yaw));
+    float y = -qSin(qDegreesToRadians(-m_pitch));
+    float x = -qCos(qDegreesToRadians(-m_pitch)) * qSin(qDegreesToRadians(m_yaw));
 
     m_lookAt = { x, y, z };
     m_lookAt.normalize();
@@ -163,7 +188,7 @@ void Camera::setRollConstraint(float max)
     m_rollConstraint = max;
 }
 
-QMatrix4x4 Camera::perspective()
+const QMatrix4x4 &Camera::perspective()
 {
     if ( m_needUpdatePerspective ) {
         this->setPerspective(m_fov, m_ratio, m_near, m_far);
@@ -173,13 +198,23 @@ QMatrix4x4 Camera::perspective()
     return m_perspective;
 }
 
-QMatrix4x4 Camera::view()
+const QMatrix4x4 &Camera::view()
 {
     if ( m_needUpdateView ) {
         this->setView(m_position, m_lookAt, m_upVector);
         m_needUpdateView = false;
     }
 
+    return m_view;
+}
+
+const QMatrix4x4& Camera::perspective() const
+{
+    return m_perspective;
+}
+
+const QMatrix4x4& Camera::view() const
+{
     return m_view;
 }
 

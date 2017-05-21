@@ -26,9 +26,11 @@ include(core/core.pri)
 include(utils/utils.pri)
 
 SOURCES += main.cpp\
-        editowindow.cpp
+        editowindow.cpp \
+    diffuseshader.cpp
 
-HEADERS  += editowindow.h
+HEADERS  += editowindow.h \
+    diffuseshader.h
 
 FORMS    += editowindow.ui
 

@@ -15,5 +15,5 @@ EditoWindow::~EditoWindow()
 
 void EditoWindow::keyPressEvent(QKeyEvent *event)
 {
-    ui->openGLWidget->m_camera->handleKeyboard(event);
+    ui->openGLWidget->m_currentCamera->handleKeyboard(event);
 }

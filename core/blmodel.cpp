@@ -1,39 +1,70 @@
 #include "blmodel.h"
 
 #include <blobjparser.h>
+#include <src/utils/bllogger.h>
+#include <blfileexceptions.h>
+
+#include <iostream>
 
 namespace black {
 
 Model::Model()
     : m_mesh(),
-      m_position(), m_scale(),
+      m_position(), m_scale(1, 1, 1),
       m_rotation(), m_matModel(),
-      m_needUpdate()
+      m_needUpdate(), m_initialized()
 {
-    initializeOpenGLFunctions();
+    auto& rm = ResourceManager::getInstance();
 
-    m_texture = std::shared_ptr<Texture>(ResourceManager::getInstance()
-            .get<Texture>("textures/default.jpg"));
+    m_material = rm.get<Material>("materials/default.mtl");
 }
 
-Model::Model(std::shared_ptr<Mesh> mesh)
+Model::Model(std::string file)
     : Model()
 {
-    m_mesh = mesh;
+    load(file);
 }
 
 Model::~Model()
 {
+    m_material.reset();
     m_mesh.reset();
-    m_texture.reset();
 }
 
 void Model::load(string file)
 {
+    Logger::getInstance() << "Loading " << file << " model..." << std::endl;
+    OBJParser parser;
+
+    try {
+        parser.parse(file);
+
+        m_mesh = std::make_unique<Mesh>();
+        m_mesh->setPositionData(parser.positions());
+
+        if ( parser.indicesCount() != 0 ) {
+            m_mesh->setIndexData(parser.indices());
+        }
+
+        if ( parser.hasTexture() ) {
+            m_mesh->setTextureCoords(parser.texCoordinates());
+        }
+
+        m_mesh->setNormalData(parser.normals());
+
+    } catch(std::string e) {
+        throw ParseException(file, e);
+    }
+
+    m_initialized = true;
+
     auto &rm = ResourceManager::getInstance();
 
-    // Get loaded mesh or load it
-    m_mesh = rm.get<Mesh>(file, false);
+    // Get mesh material
+    m_material = std::make_shared<Material>();
+    m_material = rm.get<Material>( m_material->folderName() + "/" + parser.matFile() );
+
+    Logger::getInstance() << " Done! " << std::endl;
 }
 
 void Model::setScale(float scaleX, float scaleY, float scaleZ)
@@ -42,6 +73,11 @@ void Model::setScale(float scaleX, float scaleY, float scaleZ)
     m_scale.setX(scaleX);
     m_scale.setY(scaleY);
     m_scale.setZ(scaleZ);
+}
+
+void Model::setScale(float scale)
+{
+    this->setScale(scale, scale, scale);
 }
 
 QVector3D Model::position() const
@@ -59,33 +95,12 @@ QVector3D Model::rotation() const
     return m_rotation;
 }
 
-std::shared_ptr<Mesh> Model::mesh() const
+std::shared_ptr<Material> Model::material() const
 {
-    return m_mesh;
+    return m_material;
 }
 
-void Model::setMesh(const std::shared_ptr<Mesh> &mesh)
-{
-    m_needUpdate = true;
-    m_mesh = mesh;
-}
-
-void Model::render()
-{
-    m_mesh->bind();
-    m_texture->bind();
-
-    if ( m_mesh->isIndexed() ) {
-        glDrawElements(GL_TRIANGLES, m_mesh->vertexCount(), GL_UNSIGNED_INT, 0);
-    } else {
-        glDrawArrays(GL_TRIANGLES, 0, m_mesh->vertexCount());
-    }
-
-    m_texture->release();
-    m_mesh->release();
-}
-
-QMatrix4x4 Model::getModelMatrix()
+const QMatrix4x4 &Model::modelMatrix()
 {
     if ( m_needUpdate ) {
         m_matModel.setToIdentity();
@@ -94,6 +109,7 @@ QMatrix4x4 Model::getModelMatrix()
         m_matModel.rotate(m_rotation.y(), 0.0f, 1.0f, 0.0f);
         m_matModel.rotate(m_rotation.z(), 0.0f, 0.0f, 1.0f);
         m_matModel.scale(m_scale);
+
         m_needUpdate = false;
     }
 
@@ -172,12 +188,40 @@ void Model::setScaleZ(float dz)
 
 std::shared_ptr<Texture> Model::texture() const
 {
-    return m_texture;
+    return m_material->texture();
 }
 
 void Model::setTexture(const std::shared_ptr<Texture> &texture)
 {
-    m_texture = texture;
+    m_material->setTexture(texture);
+}
+
+void Model::setMesh(const Mesh &mesh)
+{
+    if ( m_mesh ) {
+        m_mesh->release();
+    }
+
+    m_mesh = std::make_unique<Mesh>(mesh);
+}
+
+void Model::bind()
+{
+    m_mesh->bind();
+
+    if ( m_material->texture() != nullptr ) {
+        m_material->texture()->bind();
+    }
+
+}
+
+void Model::release()
+{
+    if ( m_material->texture() != nullptr ) {
+        m_material->texture()->release();
+    }
+
+    m_mesh->release();
 }
 
 

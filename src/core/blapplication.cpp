@@ -6,6 +6,8 @@
 #include <bltexture.h>
 #include <bllogger.h>
 #include <blspectatorcamera.h>
+#include <blrenderer.h>
+
 #include <diffuseshader.h>
 
 #include <QMouseEvent>
@@ -39,9 +41,9 @@ BLApplication::BLApplication(QWindow *parent)
 
     this->setFormat(format);
 
-    m_specCamera = make_unique<SpectatorCamera>();
-    m_objCamera = make_unique<SpectatorCamera>();
-    m_currentCamera = m_specCamera.get();
+    m_specCamera = make_shared<SpectatorCamera>();
+    m_objCamera = make_shared<SpectatorCamera>();
+    m_currentCamera = m_specCamera;
     m_timer = make_unique<Timer>();
 
     this->setMouseGrabEnabled(true);
@@ -51,12 +53,10 @@ BLApplication::BLApplication(QWindow *parent)
 
 BLApplication::~BLApplication()
 {
-    m_program.release();
-    m_specCamera.release();
-    m_cubeMesh.release();
-    m_axisMesh.release();
-    m_timer.release();
-    m_lightSource.release();
+    m_program.reset();
+    m_specCamera.reset();
+    m_timer.reset();
+    m_lightSource.reset();
 
     /* Models */
     m_stallMesh.reset();
@@ -64,14 +64,10 @@ BLApplication::~BLApplication()
     m_monkeyMesh.reset();
     m_houseModel.reset();
     m_landModel.reset();
-    m_cubeMesh.reset();
-    m_planeModel.reset();
     m_skyBoxModel.reset();
     m_flyingIslandModel.reset();
 
     m_brickTexture.reset();
-
-
 }
 
 void BLApplication::initializeGL()
@@ -97,16 +93,17 @@ void BLApplication::initializeGL()
         exit(1);
     }
 
+    Renderer::getInstance().setProgram(m_program);
+
     try {
         m_diffuseShader = make_unique<DiffuseShader>();
     } catch(std::string e) { // TODO: exceptions
         exit(1);
     }
 
-    m_program->bind();
-
     loadResources();
-    initModels();
+
+    m_lightSource = make_shared<Light>();
 
     m_initialized = true;
 
@@ -134,82 +131,53 @@ void BLApplication::paintGL()
 
     prepareToRender();
 
-    m_program->bind();
-    m_program->setCamera(m_currentCamera);
-
     float r = 50.0f;
     m_lightSource->setPosition({sin(dCoord * 8.0f) * r, 100.0f, cos(dCoord * 8.0f) * r});
 
-    m_program->setLight(m_lightSource.get());
+    auto& renderer = Renderer::getInstance();
+
+    renderer.setProgram(m_program);
+    renderer.setCamera(m_currentCamera);
+    renderer.setLight(m_lightSource);
 
     /* LAND MODEL */
+    //renderer.renderTerrain(m_terrain);
+
     m_landModel->setPositionY(-15.0f);
-    m_program->setModelMatrix(m_landModel->modelMatrix());
-    m_program->setMaterial(m_landModel->material());
-    m_landModel->render();
+    renderer.renderModel(m_landModel);
 
     glCullFace(GL_FRONT);
+
     m_flyingIslandModel->setPosition(450.0f, -20.0f, 80.0f);
-    m_program->setModelMatrix(m_flyingIslandModel->modelMatrix());
-    m_program->setMaterial(m_flyingIslandModel->material());
-    m_flyingIslandModel->render();
+    renderer.renderModel(m_flyingIslandModel);
+
     glCullFace(GL_BACK);
 
-//    /* PLANE MODEL */
-//    m_planeModel->setScale(dCoord);
-//    m_program->setWorldMatrix(m_camera->perspective() * m_camera->view() * m_planeModel->modelMatrix());
-//    m_planeModel->render();
+    m_program->disableTextures();
+
+    /* BODY MODEL */
+    renderer.renderModel(m_bodyMesh);
+
+    /* Monkey mask */
+    renderer.renderModel(m_monkeyMesh);
+
+    /* HOUSE MODEL */
+    renderer.renderModel(m_houseModel);
+
+    /* Stall mesh */
+    renderer.renderModel(m_stallMesh);
+
+    m_program->enableTextures();
 
     QMatrix4x4 mvpMatrix;
 
-    /* BODY MODEL */
-    m_program->setModelMatrix(m_bodyMesh->modelMatrix());
-    m_program->setMaterial(m_bodyMesh->material());
-    m_bodyMesh->render();
-
-    /* Monkey mask */
-    m_program->setModelMatrix(m_monkeyMesh->modelMatrix());
-    m_program->setMaterial(m_monkeyMesh->material());
-    m_monkeyMesh->render();
-
-    /* Stall mesh */
-    m_program->setModelMatrix(m_stallMesh->modelMatrix());
-    m_program->setMaterial(m_stallMesh->material());
-    m_stallMesh->render();
-
-    /* HOUSE MODEL */
-    m_program->setModelMatrix(m_houseModel->modelMatrix());
-    m_program->setMaterial(m_houseModel->material());
-    m_houseModel->render();
-
-    /* AXIS MESH */
-    mvpMatrix.setToIdentity();
-    mvpMatrix = m_specCamera->perspective() * m_specCamera->view() * mvpMatrix;
-
-    mvpMatrix.setToIdentity();
-
-    m_axisMesh->bind();
-
-    if ( m_axisMesh->isIndexed() ) {
-        glDrawElements(GL_TRIANGLE_STRIP, m_axisMesh->vertexCount(), GL_UNSIGNED_INT, 0);
-    } else {
-        glDrawArrays(GL_LINE_STRIP, 0, m_axisMesh->vertexCount());
-    }
-
-    m_axisMesh->release();
-    m_program->release();
-
-    m_diffuseShader->bind();
+    renderer.setProgram(m_diffuseShader);
 
     /* SKY BOX */
-    glDisable(GL_CULL_FACE);
+    //glDisable(GL_CULL_FACE);
 
-    m_skyBoxModel->setScale(1000.0f);
-    m_diffuseShader->setCamera(m_currentCamera);
-    m_diffuseShader->setModelMatrix(m_skyBoxModel->modelMatrix());
-    m_skyBoxModel->render();
-
-    m_diffuseShader->release();
+    //m_skyBoxModel->setScale(1000.0f);
+    //renderer.renderModel(m_skyBoxModel);
 
     dCoord += 0.002f;
 
@@ -217,84 +185,32 @@ void BLApplication::paintGL()
     //Logger::getInstance() << "fps = " << m_timer->fps() << '\n';
 }
 
-void BLApplication::initModels()
-{
-
-    m_cubeMesh = make_unique<CubeMesh>();
-
-    //Renders axis to the screen
-    m_axisMesh = make_unique<Mesh>();
-
-    m_axisMesh->setPositionData({
-       0.0f, 0.0f, 0.0f,
-       0.0f, 1.0f, 0.0f,
-       0.0f, 0.0f, 0.0f,
-       1.0f, 0.0f, 0.0f,
-       0.0f, 0.0f, 0.0f,
-       0.0f, 0.0f, 1.0f,
-    });
-
-    m_lightSource = make_unique<Light>();
-}
-
 void BLApplication::loadResources()
 {
-    // TODO: maybe Separate loading and init models
-
     auto& rm = ResourceManager::getInstance();
 
     /* TEXTURES */
     auto guid = rm.load<Texture>("textures/default.jpg");
 
-    guid = rm.load<Texture>("textures/bricks_xxl.jpg");
-    m_brickTexture = rm.get<Texture>(guid);
-
-    guid = rm.load<Texture>("textures/wood.jpg");
-    guid = rm.load<Texture>("textures/logo.jpg");
-    guid = rm.load<Texture>("textures/grass_stone.jpg");
-    guid = rm.load<Texture>("textures/wallpaper.bmp");
-    guid = rm.load<Texture>("textures/table_wood.bmp");
-    guid = rm.load<Texture>("textures/brick_damaged.jpg");
-    guid = rm.load<Texture>("textures/sky_box/stormyday.jpg");
-    guid = rm.load<Texture>("textures/sand.jpg");
-
     /* MATERIALS */
     guid = rm.load<Material>("materials/default.mtl");
 
     /* MODELS */
-    guid = rm.load<Model>("models/cube_textured.obj");
-    m_cubeModel = rm.get<Model>(guid);
-    m_cubeModel->setTexture(rm.get<Texture>("textures/brick_damaged.jpg"));
 
     guid = rm.load<Model>("models/skybox.obj");
     m_skyBoxModel = rm.get<Model>(guid);
-    m_skyBoxModel->setTexture(rm.get<Texture>("textures/sky_box/stormyday.jpg"));
-
-    guid = rm.load<Model>("models/plane.obj");
-    m_planeModel = rm.get<Model>(guid);
-    m_planeModel->setTexture(rm.get<Texture>("textures/logo.jpg"));
-
     guid = rm.load<Model>("models/stall.obj");
     m_stallMesh = rm.get<Model>(guid);
-    m_stallMesh->setTexture(rm.get<Texture>("textures/grass_stone.jpg"));
-
     guid = rm.load<Model>("models/body_triangulated.obj");
     m_bodyMesh = rm.get<Model>(guid);
-
     guid = rm.load<Model>("models/monkey.obj");
     m_monkeyMesh = rm.get<Model>(guid);
-
     guid = rm.load<Model>("models/house_triangulated.obj");
     m_houseModel = rm.get<Model>(guid);
-    m_houseModel->setTexture(rm.get<Texture>("textures/wallpaper.bmp"));
-
     guid = rm.load<Model>("models/land.obj");
     m_landModel = rm.get<Model>(guid);
-    m_landModel->setTexture(rm.get<Texture>("textures/sand.jpg"));
-
     guid = rm.load<Model>("models/flying_island.obj");
     m_flyingIslandModel = rm.get<Model>(guid);
-    m_flyingIslandModel->setTexture(rm.get<Texture>("textures/sand.jpg"));
 }
 
 void BLApplication::prepareToRender()
@@ -317,10 +233,10 @@ void BLApplication::keyPressEvent(QKeyEvent *event)
 {
     switch(event->key()) {
     case Qt::Key_F1:
-        m_currentCamera = m_specCamera.get();
+        m_currentCamera = m_specCamera;
         break;
     case Qt::Key_F2:
-        m_currentCamera = m_objCamera.get();
+        m_currentCamera = m_objCamera;
         break;
     default:
         break;

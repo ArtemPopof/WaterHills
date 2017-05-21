@@ -1,6 +1,6 @@
 #include "blobjparser.h"
 
-#include <exception>
+#include <blfileexceptions.h>
 #include <iostream>
 
 namespace black {
@@ -15,6 +15,7 @@ OBJParser::OBJParser()
       m_vNormal(),
       m_vTexture(),
       m_vIndex(),
+      m_matFile(),
 
       m_file(),
 
@@ -24,14 +25,11 @@ OBJParser::OBJParser()
 
 }
 
-void OBJParser::parseObj(std::string path)
+void OBJParser::parse(std::string path)
 {
     m_file.open(path);
     if ( !m_file.is_open() ) {
-        std::cerr << "Failed to load model " << path << ": file not found!" << '\n';
-
-        //TODO: exceptions
-        throw "Bad file";
+        throw NoSuchFileException(path);
     }
 
     std::string line;
@@ -43,10 +41,7 @@ void OBJParser::parseObj(std::string path)
     getline(m_file, header2); // Second header line
 
     if ( header1.find("OBJ") == std::string::npos ) {
-        std::cerr << "Failed to load model " << path << ": wrong obj file!" << '\n';
-
-        //TODO: exceptions
-        throw "Bad file";
+        throw WrongFileException(path, ".obj");
     }
 
     std::string type; // Type of a data (v for vertices, vn for normals and so on)
@@ -55,8 +50,7 @@ void OBJParser::parseObj(std::string path)
     try {
         while (readVertex()) {}
     } catch(std::exception &e) {
-        std::cerr << "Failed to load model " << path << ": " <<  e.what() << '\n';
-        throw e;
+        throw ParseException(path, e.what());
     }
 
     // Sorting data
@@ -114,6 +108,8 @@ bool OBJParser::readVertex()
         } else if ( type == "f" ) {   // End of list
             m_file.unget();
             return false;
+        } else if ( type == "mtllib" ) {
+            m_file >> m_matFile;
         } else { // Skip this line
             getline(m_file, type);
             return true;
@@ -141,10 +137,13 @@ void OBJParser::readTexture()
 {
     float fnumber;
 
+    // 1.0f - fnumber on y fix 26.03.17
+    // blender texture starts on bottom left
+    // opengl texture starts on top left
     m_file >> fnumber;
     m_uvCoords.push_back(fnumber);
     m_file >> fnumber;
-    m_uvCoords.push_back(fnumber);
+    m_uvCoords.push_back(1.0f - fnumber);
 }
 
 void OBJParser::readNormal()
@@ -195,7 +194,6 @@ bool OBJParser::readFace()
             break;
         }
 
-        // TODO: remove this kostyl
         if ( group == "f" || group == "usemtl" ) {
             m_file.unget();
             break;
@@ -225,7 +223,6 @@ void OBJParser::readFaceElement(const std::string splited[])
         index = std::stoi(splited[1]) - 1;
         m_vTexture.push_back(m_uvCoords[index * 2]);
         m_vTexture.push_back(m_uvCoords[index * 2 + 1]);
-        m_vTexture.push_back(m_uvCoords[index * 2 + 2]);
 
         index = std::stoi(splited[2]) - 1;
     } else { // If there are no texture coord (1//1)
@@ -235,6 +232,11 @@ void OBJParser::readFaceElement(const std::string splited[])
     m_vNormal.push_back(m_normals[index * 3]);
     m_vNormal.push_back(m_normals[index * 3 + 1]);
     m_vNormal.push_back(m_normals[index * 3 + 2]);
+}
+
+std::string OBJParser::matFile() const
+{
+    return m_matFile;
 }
 
 }

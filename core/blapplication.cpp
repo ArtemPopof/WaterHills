@@ -1,9 +1,14 @@
+#include "blmaterial.h"
+
 #include <blapplication.h>
 #include <blresourcemanager.h>
 #include <blobjectcamera.h>
 #include <bltexture.h>
 #include <bllogger.h>
 #include <blspectatorcamera.h>
+#include <blrenderer.h>
+
+#include <diffuseshader.h>
 
 #include <QMouseEvent>
 #include <QSurfaceFormat>
@@ -18,7 +23,7 @@ using namespace black;
 
 BLApplication::BLApplication(QWidget *parent)
     : QOpenGLWidget(parent),
-      m_camera(),
+      m_specCamera(),
       m_timer(),
       m_stallMesh(),
       m_bodyMesh(),
@@ -33,7 +38,9 @@ BLApplication::BLApplication(QWidget *parent)
 
     this->setFormat(format);
 
-    m_camera = make_unique<SpectatorCamera>();
+    m_specCamera = make_shared<SpectatorCamera>();
+    m_objCamera = make_shared<SpectatorCamera>();
+    m_currentCamera = m_specCamera;
     m_timer = make_unique<Timer>();
 
     connect(this, SIGNAL(frameSwapped()), this, SLOT(update()));
@@ -41,18 +48,20 @@ BLApplication::BLApplication(QWidget *parent)
 
 BLApplication::~BLApplication()
 {
-    m_program.release();
-    m_vShader.release();
-    m_fShader.release();
-    m_camera.release();
-    m_cubeMesh.release();
-    m_axisMesh.release();
-    m_timer.release();
-    m_lightSource.release();
+    m_program.reset();
+    m_specCamera.reset();
+    m_timer.reset();
+    m_lightSource.reset();
 
+    /* Models */
     m_stallMesh.reset();
     m_bodyMesh.reset();
     m_monkeyMesh.reset();
+    m_houseModel.reset();
+    m_landModel.reset();
+    m_skyBoxModel.reset();
+    m_flyingIslandModel.reset();
+
     m_brickTexture.reset();
 }
 
@@ -61,43 +70,35 @@ void BLApplication::initializeGL()
 
     initializeOpenGLFunctions();
 
-    m_vShader = make_unique<QOpenGLShader>(
-                QOpenGLShader::Vertex);
-    m_fShader = make_unique<QOpenGLShader>(
-                QOpenGLShader::Fragment);
+    auto& rm = ResourceManager::getInstance();
 
-    m_vShader->compileSourceFile("shaders/simple_vertex.vert");
-    m_fShader->compileSourceFile("shaders/simple_fragment.frag");
-
-    if ( !m_vShader->isCompiled() ) {
-        Logger::getInstance() << m_vShader->log().toStdString();
+    // Load shaders and init variables
+    try {
+        m_vShader = rm.get<Shader>("shaders/simple_vertex.vert");
+        m_fShader = rm.get<Shader>("shaders/simple_fragment.frag");
+    } catch(std::string e) { // TODO: exceptions
+        Logger::getInstance() << m_vShader->log() << std::endl;
+        Logger::getInstance() << m_fShader->log() << std::endl;
         exit(1);
     }
-    if ( !m_fShader->isCompiled() ) {
-        Logger::getInstance() << m_fShader->log().toStdString();
-        exit(2);
+
+    try {
+        m_program = make_unique<ShaderProgram>(m_vShader, m_fShader);
+    } catch(std::string e) { // TODO: exceptions
+        exit(1);
     }
 
-    m_program = make_unique<QOpenGLShaderProgram>(this);
-    m_program->addShader(m_vShader.get());
-    m_program->addShader(m_fShader.get());
+    Renderer::getInstance().setProgram(m_program);
 
-    m_program->bindAttributeLocation("vPosition", Constants::VERTEX_ATTR_POSITION);
-    m_program->bindAttributeLocation("vColor", Constants::VERTEX_ATTR_COLOR);
-    m_program->bindAttributeLocation("vTexCoords", Constants::VERTEX_ATTR_TEXCOORDS);
-    m_program->bindAttributeLocation("vNormal", Constants::VERTEX_ATTR_NORMAL);
-
-    if ( !m_program->link() ) {
-        Logger::getInstance() << m_vShader->log().toStdString();
-        Logger::getInstance() << m_fShader->log().toStdString();
-        Logger::getInstance() << m_program->log().toStdString();
-        exit(3);
+    try {
+        m_diffuseShader = make_unique<DiffuseShader>();
+    } catch(std::string e) { // TODO: exceptions
+        exit(1);
     }
-
-    m_program->bind();
 
     loadResources();
-    initModels();
+
+    m_lightSource = make_shared<Light>();
 
     m_initialized = true;
 
@@ -110,7 +111,7 @@ void BLApplication::resizeGL(int w, int h)
     glViewport((w - side) / 2, (h - side) / 2, side, side);
 
     float ratio = w / (float) h;
-    m_camera->setAspectRatio(ratio);
+    m_specCamera->setAspectRatio(ratio);
 }
 
 void BLApplication::paintGL()
@@ -125,65 +126,53 @@ void BLApplication::paintGL()
 
     prepareToRender();
 
-    m_program->bind();
+    float r = 50.0f;
+    m_lightSource->setPosition({sin(dCoord * 8.0f) * r, 100.0f, cos(dCoord * 8.0f) * r});
 
-    double r = 10.0;
+    auto& renderer = Renderer::getInstance();
 
-    m_lightSource->setPosition(m_camera->position());
-    m_lightSource->setColor({1.0f, 1.0f, 1.0f});
+    renderer.setProgram(m_program);
+    renderer.setCamera(m_currentCamera);
+    renderer.setLight(m_lightSource);
 
-    m_program->setUniformValue("vLightPos", m_lightSource->position());
-    m_program->setUniformValue("fLightColor", m_lightSource->color());
+    /* LAND MODEL */
+    //renderer.renderTerrain(m_terrain);
+
+    m_landModel->setPositionY(-15.0f);
+    renderer.renderModel(m_landModel);
+
+    glCullFace(GL_FRONT);
+
+    m_flyingIslandModel->setPosition(450.0f, -20.0f, 80.0f);
+    renderer.renderModel(m_flyingIslandModel);
+
+    glCullFace(GL_BACK);
+
+    m_program->disableTextures();
+
+    /* BODY MODEL */
+    renderer.renderModel(m_bodyMesh);
 
     /* Monkey mask */
-    QMatrix4x4 mvpMatrix;
-    mvpMatrix = m_camera->perspective() * m_camera->view() * mvpMatrix;
-
-    m_program->setUniformValue("mMatrix", mvpMatrix);
-
-    m_bodyMesh->render();
-
-    /* Monkey mask */
-    mvpMatrix.translate(-1.0f, 17.0f, 1.0f);
-    mvpMatrix.scale(1.5f);
-    m_program->setUniformValue("mMatrix", mvpMatrix);
-
-    m_monkeyMesh->render();
-
-    /* Stall mesh */
-
-    mvpMatrix.setToIdentity();
-    mvpMatrix.translate(0, 0, 10.0f);
-    mvpMatrix.rotate(180.0f, 0, 1.0f, 0);
-    mvpMatrix.scale(4.5f);
-
-    mvpMatrix = m_camera->perspective() * m_camera->view() * mvpMatrix;
-    m_program->setUniformValue("mMatrix", mvpMatrix);
-
-    m_stallMesh->render();
+    renderer.renderModel(m_monkeyMesh);
 
     /* HOUSE MODEL */
-    mvpMatrix.setToIdentity();
-    mvpMatrix.translate(0, 0, -20.0f);
+    renderer.renderModel(m_houseModel);
 
-    mvpMatrix = m_camera->perspective() * m_camera->view() * mvpMatrix;
-    m_program->setUniformValue("mMatrix", mvpMatrix);
+    /* Stall mesh */
+    renderer.renderModel(m_stallMesh);
 
-    m_houseModel->render();
+    m_program->enableTextures();
 
-    mvpMatrix.setToIdentity();
-    mvpMatrix = m_camera->perspective() * m_camera->view() * mvpMatrix;
+    QMatrix4x4 mvpMatrix;
 
-    m_axisMesh->bind();
+    renderer.setProgram(m_diffuseShader);
 
-    if ( m_axisMesh->isIndexed() ) {
-        glDrawElements(GL_TRIANGLE_STRIP, m_axisMesh->vertexCount(), GL_UNSIGNED_INT, 0);
-    } else {
-        glDrawArrays(GL_LINE_STRIP, 0, m_axisMesh->vertexCount());
-    }
+    /* SKY BOX */
+    //glDisable(GL_CULL_FACE);
 
-    m_axisMesh->release();
-    m_program->release();
+    //m_skyBoxModel->setScale(1000.0f);
+    //renderer.renderModel(m_skyBoxModel);
 
     dCoord += 0.002f;
 
@@ -191,59 +180,32 @@ void BLApplication::paintGL()
     //Logger::getInstance() << "fps = " << m_timer->fps() << '\n';
 }
 
-void BLApplication::initModels()
-{
-
-    m_cubeMesh = make_unique<CubeMesh>();
-
-    //Renders axis to the screen
-    m_axisMesh = make_unique<Mesh>();
-
-    m_axisMesh->setPositionData({
-       0.0f, 0.0f, 0.0f,
-       0.0f, 1.0f, 0.0f,
-       0.0f, 0.0f, 0.0f,
-       1.0f, 0.0f, 0.0f,
-       0.0f, 0.0f, 0.0f,
-       0.0f, 0.0f, 1.0f,
-    });
-
-    std::array<float, 3> position = { 0.0f, 30.0f, 0.0f };
-    std::array<float, 3> color = { 1.0f, 0.2f, 0.2f };
-
-    m_lightSource = make_unique<Light>(position, color);
-}
-
 void BLApplication::loadResources()
 {
-    // TODO: maybe Separate loading and init models
-
     auto& rm = ResourceManager::getInstance();
 
     /* TEXTURES */
     auto guid = rm.load<Texture>("textures/default.jpg");
 
-    guid = rm.load<Texture>("textures/bricks_xxl.jpg");
-    m_brickTexture = rm.get<Texture>(guid);
-
-    guid = rm.load<Texture>("textures/wood.jpg");
-    guid = rm.load<Texture>("textures/logo.jpg");
-    guid = rm.load<Texture>("textures/grass_stone.jpg");
+    /* MATERIALS */
+    guid = rm.load<Material>("materials/default.mtl");
 
     /* MODELS */
+
+    guid = rm.load<Model>("models/skybox.obj");
+    m_skyBoxModel = rm.get<Model>(guid);
     guid = rm.load<Model>("models/stall.obj");
     m_stallMesh = rm.get<Model>(guid);
-    m_stallMesh->setTexture(rm.get<Texture>("textures/grass_stone.jpg"));
-
     guid = rm.load<Model>("models/body_triangulated.obj");
     m_bodyMesh = rm.get<Model>(guid);
-
     guid = rm.load<Model>("models/monkey.obj");
     m_monkeyMesh = rm.get<Model>(guid);
-
     guid = rm.load<Model>("models/house_triangulated.obj");
     m_houseModel = rm.get<Model>(guid);
-    m_houseModel->setTexture(rm.get<Texture>("textures/wood.jpg"));
+    guid = rm.load<Model>("models/land.obj");
+    m_landModel = rm.get<Model>(guid);
+    guid = rm.load<Model>("models/flying_island.obj");
+    m_flyingIslandModel = rm.get<Model>(guid);
 }
 
 void BLApplication::prepareToRender()
@@ -259,15 +221,26 @@ void BLApplication::prepareToRender()
 
 void BLApplication::wheelEvent(QWheelEvent *event)
 {
-    m_camera->handleWheel(event);
+    m_currentCamera->handleWheel(event);
 }
 
 void BLApplication::keyPressEvent(QKeyEvent *event)
 {
-    m_camera->handleKeyboard(event);
+    switch(event->key()) {
+    case Qt::Key_F1:
+        m_currentCamera = m_specCamera;
+        break;
+    case Qt::Key_F2:
+        m_currentCamera = m_objCamera;
+        break;
+    default:
+        break;
+    }
+
+    m_currentCamera->handleKeyboard(event);
 }
 
 void BLApplication::mouseMoveEvent(QMouseEvent *event)
 {
-    m_camera->handleMouse(event);
+    m_currentCamera->handleMouse(event);
 }

@@ -1,7 +1,7 @@
 #ifndef BLOBJPARSER_H
 #define BLOBJPARSER_H
 
-#include "core/blmesh.h"
+#include "src/core/blmesh.h"
 
 #include <deque>
 #include <vector>
@@ -21,6 +21,12 @@ namespace black {
  * Probably needs some optimizations and benchmarking.
  *
  * @author george popoff <popoff96@live.com>
+ *
+ * @version 1.3.5 28.03.2017
+ * Now reads information about material file.
+ *
+ * @version 1.3 26.03.2017
+ * Fixed bug with texture coodinates. Now looks good.
  *
  * @version 1.2.5 22.03.2017
  * Fixed bug when object file contains multiple usemtl statements.
@@ -43,7 +49,7 @@ public:
      * @brief Parses a obj file
      * @param file OBJ File path
      */
-    void parseObj(std::string file);
+    void parse(std::string file);
 
     const std::vector<float>& positions() const { return m_vVertex; }
     const std::vector<float>& normals() const { return m_vNormal; }
@@ -55,6 +61,8 @@ public:
 
     bool hasTexture() const { return m_hasTexture; }
     bool quads() const { return m_quads; }
+
+    std::string matFile() const;
 
 private:
     void splitString(std::string str, std::string delimiter, std::string *out, int size);
@@ -82,6 +90,7 @@ private:
     std::vector<float> m_vNormal;
     std::vector<float> m_vTexture;
     std::vector<uint>  m_vIndex;
+    std::string m_matFile;
 
     std::ifstream m_file;
 

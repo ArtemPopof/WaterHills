@@ -1,8 +1,9 @@
 #ifndef MODEL_H
 #define MODEL_H
 
-#include "blmesh.h"
-#include "bltexture.h"
+#include <src/core/blmaterial.h>
+#include <src/core/blmesh.h>
+#include <src/core/bltexture.h>
 
 #include <memory>
 
@@ -20,30 +21,46 @@ namespace black {
  * providing very useful method render() to draw whole model
  * using opengl pipeline
  *
- * @author george popoff <popoff96@live.com>
+ * @author george popoff <popoff96@live.com> 
+ * @version 1.2.5 02.04.2017
+ *
+ * @version 1.2 28.03.2017
+ * Support of materials. Loading from obj code
+ * moved from mesh to model class
+ *
+ * @version 1.1 27.03.2017
+ *  Fixed bug with scale vector
  *
  * @version 1.0 19.03.2017
  *  Working version of Model class
  */
-class Model : public Resource, private QOpenGLFunctions
+class Model : public Resource
 {
+public:
+
     friend class ResourceManager;
 public:
     Model();
-    Model(std::shared_ptr<Mesh> mesh);
+    Model(std::string file);
 
     ~Model();
 
     // Resource interface
     std::shared_ptr<Texture> texture() const;
-    std::shared_ptr<Mesh> mesh() const;
+    std::shared_ptr<Material> material() const;
+
+    bool isInitialized() const { return m_initialized; }
+    bool isIndexed() const { return m_mesh->isIndexed(); }
+
+    size_t vertexCount() const { return m_mesh->vertexCount(); }
 
     void setTexture(const std::shared_ptr<Texture> &texture);
-    void setMesh(const std::shared_ptr<Mesh> &mesh);
+    void setMesh(const Mesh &mesh);
 
-    void render();
+    void bind();
+    void release();
 
-    QMatrix4x4 getModelMatrix();
+    const QMatrix4x4& modelMatrix();
 
     /* MODEL matrix properties */
     void setPosition(float dx, float dy, float dz);
@@ -57,6 +74,7 @@ public:
     void setRotationZ(float angle);
 
     void setScale(float dx, float dy, float dz);
+    void setScale(float scale);
     void setScaleX(float dx);
     void setScaleY(float dy);
     void setScaleZ(float dz);
@@ -67,10 +85,13 @@ public:
 
 private:
     void load(string file) override;
+public:
+    std::string defaultName() override { return std::string("default.obj"); }
+    std::string folderName()  override { return std::string("models");      }
 
 private:
-    std::shared_ptr<Texture> m_texture;
-    std::shared_ptr<Mesh> m_mesh;
+    std::unique_ptr<Mesh> m_mesh;
+    std::shared_ptr<Material> m_material;
 
     QVector3D m_position;
     QVector3D m_scale;
@@ -79,6 +100,7 @@ private:
     QMatrix4x4 m_matModel;
 
     bool m_needUpdate;
+    bool m_initialized;
 };
 
 } // end of black namespace

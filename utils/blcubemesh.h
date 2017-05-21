@@ -3,7 +3,7 @@
 
 #include <QOpenGLShaderProgram>
 
-#include "core/blmesh.h"
+#include "src/core/blmesh.h"
 
 namespace black {
 
