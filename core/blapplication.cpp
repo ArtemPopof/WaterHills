@@ -28,7 +28,8 @@ BLApplication::BLApplication(QWidget *parent)
       m_stallMesh(),
       m_bodyMesh(),
       m_brickTexture(),
-      m_lightSource()
+      m_lightSource(),
+      waterLevel(0)
 {
     QSurfaceFormat format;
     format.setMajorVersion(Constants::OPENGL_MAJOR_VERSION);
@@ -141,6 +142,8 @@ void BLApplication::paintGL()
     m_landModel->setPositionY(-15.0f);
     renderer.renderModel(m_landModel);
 
+    m_monkeyMesh->setPosition(-20.0f, waterLevel -20.0f, 0);
+
     glCullFace(GL_FRONT);
 
     m_flyingIslandModel->setPosition(450.0f, -20.0f, 80.0f);
@@ -153,9 +156,6 @@ void BLApplication::paintGL()
     /* BODY MODEL */
     renderer.renderModel(m_bodyMesh);
 
-    /* Monkey mask */
-    renderer.renderModel(m_monkeyMesh);
-
     /* HOUSE MODEL */
     renderer.renderModel(m_houseModel);
 
@@ -163,6 +163,9 @@ void BLApplication::paintGL()
     renderer.renderModel(m_stallMesh);
 
     m_program->enableTextures();
+
+    /* Monkey mask */
+    renderer.renderModel(m_monkeyMesh);
 
     QMatrix4x4 mvpMatrix;
 
@@ -198,11 +201,11 @@ void BLApplication::loadResources()
     m_stallMesh = rm.get<Model>(guid);
     guid = rm.load<Model>("models/body_triangulated.obj");
     m_bodyMesh = rm.get<Model>(guid);
-    guid = rm.load<Model>("models/monkey.obj");
+    guid = rm.load<Model>("models/water.obj");
     m_monkeyMesh = rm.get<Model>(guid);
     guid = rm.load<Model>("models/house_triangulated.obj");
     m_houseModel = rm.get<Model>(guid);
-    guid = rm.load<Model>("models/land.obj");
+    guid = rm.load<Model>("models/brick_hill.obj");
     m_landModel = rm.get<Model>(guid);
     guid = rm.load<Model>("models/flying_island.obj");
     m_flyingIslandModel = rm.get<Model>(guid);
@@ -222,6 +225,11 @@ void BLApplication::prepareToRender()
 void BLApplication::wheelEvent(QWheelEvent *event)
 {
     m_currentCamera->handleWheel(event);
+}
+
+void BLApplication::setWaterLevel(int relativeLevel)
+{
+    this->waterLevel = relativeLevel;
 }
 
 void BLApplication::keyPressEvent(QKeyEvent *event)

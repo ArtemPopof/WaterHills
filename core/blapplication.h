@@ -71,9 +71,14 @@ private:
 
     std::shared_ptr<black::Light> m_lightSource;
 
+    int waterLevel;
+
     // QWindow interface
 protected:
     void wheelEvent(QWheelEvent *) override;
+
+public:
+    void setWaterLevel(int relativeLevel);
 };
 
 #endif // BLAPPLICATION_H

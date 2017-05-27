@@ -21,6 +21,8 @@ private:
     // QWidget interface
 protected:
     void keyPressEvent(QKeyEvent *event);
+private slots:
+    void on_verticalSlider_sliderMoved(int position);
 };
 
 #endif // EDITOWINDOW_H
