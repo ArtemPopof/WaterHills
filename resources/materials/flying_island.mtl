@@ -1,0 +1,24 @@
+# Blender MTL File: 'None'
+# Material Count: 2
+
+newmtl Material.001
+Ns 384.313725
+Ka 1.000000 1.000000 1.000000
+Kd 0.640000 0.367612 0.014922
+Ks 0.256944 0.256944 0.256944
+Ke 0.000000 0.000000 0.000000
+Ni 1.000000
+d 1.000000
+illum 2
+map_Kd /home/archie/qtprojects/build-blackEngine-Desktop_Qt_5_8_0_GCC_64bit-Debug/resources/textures/sand.jpg
+
+newmtl Material.001_NONE
+Ns 384.313725
+Ka 1.000000 1.000000 1.000000
+Kd 0.640000 0.367612 0.014922
+Ks 0.256944 0.256944 0.256944
+Ke 0.000000 0.000000 0.000000
+Ni 1.000000
+d 1.000000
+illum 2
+map_Kd /home/archie/qtprojects/build-blackEngine-Desktop_Qt_5_8_0_GCC_64bit-Debug/resources/textures/sand.jpg

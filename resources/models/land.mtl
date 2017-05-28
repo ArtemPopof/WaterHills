@@ -1,0 +1,13 @@
+# Blender MTL File: 'None'
+# Material Count: 1
+
+newmtl desert_sand
+Ns 250.980392
+Ka 1.000000 1.000000 1.000000
+Kd 0.640000 0.616204 0.597672
+Ks 0.127907 0.127907 0.127907
+Ke 0.000000 0.000000 0.000000
+Ni 1.000000
+d 1.000000
+illum 2
+map_Kd /home/archie/qtprojects/build-blackEngine-Desktop_Qt_5_8_0_GCC_64bit-Debug/resources/textures/sand.jpg
