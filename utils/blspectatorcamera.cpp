@@ -2,6 +2,7 @@
 
 #include <cmath>
 #include <bllogger.h>
+#include <iostream>
 
 #include <QCursor>
 
@@ -11,10 +12,13 @@ SpectatorCamera::SpectatorCamera()
     : Camera(), m_lastMousePos(), m_firstMouseEvent(true),
       m_speed(1.0f), m_smoothness(0.5f)
 {
-    this->setPosition({0.0, 5.0f, 20.0f});
+    this->setPosition({400.0f, 600.0f, 400.0f});
 
-    this->setPitchConstraint(90);
-    this->setYawConstraint(90);
+    this->setPitchConstraint(-56.5f);
+    this->setYawConstraint(-229.0f);
+    this->setRoll(1.0f);
+
+    this->setRotate({-56.5f, -229.0f, 1.0f});
 }
 
 void SpectatorCamera::handleKeyboard(QKeyEvent *e)
@@ -57,6 +61,7 @@ void SpectatorCamera::handleMouse(QMouseEvent *e)
         dy *= 1.0f - m_smoothness;
 
         this->setRotate({m_pitch + dy, m_yaw + dx, m_roll});
+        std::cout << "\nrotating pitch: " << m_pitch << " yaw: " << m_yaw << " roll: " << m_roll << endl;
     } else {
         m_firstMouseEvent = false;
     }

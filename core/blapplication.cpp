@@ -199,7 +199,7 @@ void BLApplication::loadResources()
     m_skyBoxModel = rm.get<Model>(guid);
     guid = rm.load<Model>("models/stall.obj");
     m_stallMesh = rm.get<Model>(guid);
-    guid = rm.load<Model>("models/body_triangulated.obj");
+    //guid = rm.load<Model>("models/body_triangulated.obj");
     m_bodyMesh = rm.get<Model>(guid);
     guid = rm.load<Model>("models/water.obj");
     m_monkeyMesh = rm.get<Model>(guid);
